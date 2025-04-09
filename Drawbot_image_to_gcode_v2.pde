@@ -1,3 +1,5 @@
+import java.awt.Frame;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 // My Drawbot, "Death to Sharpie"
 // Jpeg to gcode simplified (kinda sorta works version, v3.75 (beta))
@@ -16,13 +18,13 @@ import processing.pdf.*;
 
 
 // Constants 
-final float   paper_size_x = 32 * 25.4;
-final float   paper_size_y = 40 * 25.4;
-final float   image_size_x = 28 * 25.4;
-final float   image_size_y = 36 * 25.4;
-final float   paper_top_to_origin = 285;      //mm, make smaller to move drawing down on paper
-final float   pen_width = 0.65;               //mm, determines image_scale, reduce, if solid black areas are speckled with white holes.
-final int     pen_count = 6;
+final float   paper_size_x = 710; //32 * 25.4;
+final float   paper_size_y = 920; //40 * 25.4;
+final float   image_size_x = 700; //28 * 25.4;
+final float   image_size_y = 900; //36 * 25.4;
+final float   paper_top_to_origin = 0; //285;        //mm, make smaller to move drawing down on paper
+final float   pen_width = .65; //0.65;               //mm, determines image_scale, reduce, if solid black areas are speckled with white holes.
+final int     pen_count = 2; //2 6
 final char    gcode_decimal_seperator = '.';    
 final int     gcode_decimals = 2;             // Number of digits right of the decimal point in the gcode files.
 final int     svg_decimals = 2;               // Number of digits right of the decimal point in the SVG file.
@@ -37,7 +39,7 @@ String[] pfms = {"PFM_original", "PFM_spiral", "PFM_squares"};
 
 int     state = 1;
 int     pen_selected = 0;
-int     current_copic_set = 0;
+int     current_copic_set = 0; //0;
 int     display_line_count;
 String  display_mode = "drawing";
 PImage  img_orginal;               // The original image
@@ -51,9 +53,9 @@ float   screen_scale_org;
 int     screen_rotate = 0;
 float   old_x = 0;
 float   old_y = 0;
-int     mx = 0;
+int     mx = 105;    //0 
 int     my = 0;
-int     morgx = 0;
+int     morgx = 0; 
 int     morgy = 0;
 int     pen_color = 0;
 boolean is_pen_down;
@@ -73,6 +75,9 @@ botDrawing d1;
 float[] pen_distribution = new float[pen_count];
 
 String[][] copic_sets = {
+  {"100", "N4", "0", "0", "0", "0"},            // Custom Micron + Uniball
+  {"100", "0", "0", "0", "0", "0"},             // Custom One black pen
+  {"100", "E27", "YG99", "Y17", "0", "0"},            // Experimental
   {"100", "N10", "N8", "N6", "N4", "N2"},       // Dark Greys
   {"100", "100", "N7", "N5", "N3", "N2"},       // Light Greys
   {"100", "W10", "W8", "W6", "W4", "W2"},       // Warm Greys
@@ -97,8 +102,8 @@ String[][] copic_sets = {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
-  size(1415, 900, P3D);
-  frame.setLocation(200, 200);
+  size(900, 900, P3D);  //1415, 900
+  //frame.setLocation(200, 200);
   surface.setResizable(true);
   surface.setTitle("Drawbot_image_to_gcode_v2, version 3.75");
   colorMode(RGB);
@@ -148,11 +153,12 @@ void draw() {
     ocl.find_path();
     display_line_count = d1.line_count;
     break;
-  case 4: 
+  case 4:
     println("State=4, pfm.post_processing");
     ocl.post_processing();
 
-    set_even_distribution();
+    //set_even_distribution();
+    set_custom_distribution(.4);
     normalize_distribution();
     d1.evenly_distribute_pen_changes(d1.get_line_count(), pen_count);
     d1.distribute_pen_changes_according_to_percentages(display_line_count, pen_count);
@@ -160,13 +166,14 @@ void draw() {
     println("elapsed time: " + (millis() - startTime) / 1000.0 + " seconds");
     display_line_count = d1.line_count;
   
-    gcode_comment ("extreams of X: " + dx.min + " thru " + dx.max);
-    gcode_comment ("extreams of Y: " + dy.min + " thru " + dy.max);
+    gcode_comment ("extremes of X: " + dx.min + " thru " + dx.max);
+    gcode_comment ("extremes of Y: " + dy.min + " thru " + dy.max);
     state++;
     break;
   case 5: 
     render_all();
     noLoop();
+    save("gcode\\gcode_" + basefile_selected + ".jpg");
     break;
   default:
     println("invalid state: " + state);
@@ -218,7 +225,7 @@ void setup_squiggles() {
   gcode_scale_x = image_size_x / img.width;
   gcode_scale_y = image_size_y / img.height;
   gcode_scale = min(gcode_scale_x, gcode_scale_y);
-  gcode_offset_x = - (img.width * gcode_scale / 2.0);  
+  gcode_offset_x = 0; //- (img.width * gcode_scale / 2.0);  
   gcode_offset_y = - (paper_top_to_origin - (paper_size_y - (img.height * gcode_scale)) / 2.0);
 
   screen_scale_x = width / (float)img.width;
@@ -363,8 +370,12 @@ void keyPressed() {
     create_svg_file(display_line_count);
     d1.render_to_pdf(display_line_count);
     d1.render_each_pen_to_pdf(display_line_count);
+    // Added by RTS - Create an SVG file for every pen
+    for (int p=pen_count-1; p>=0; p--) { 
+      create_svg_files(p, display_line_count);
+    }
+    
   }
-
   if (key == '\\') { screen_scale = screen_scale_org; screen_rotate=0; mx=0; my=0; }
   if (key == '<') {
     int delta = -10000;
@@ -418,6 +429,16 @@ void set_even_distribution() {
     pen_distribution[p] = display_line_count / pen_count;
     //println("pen_distribution[" + p + "] = " + pen_distribution[p]);
   }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+void set_custom_distribution(float ratio) {
+  println("set_custom_distribution");
+  //for (int p = 0; p<pen_count; p++) {
+    pen_distribution[0] = (display_line_count / pen_count) * ratio;
+    pen_distribution[1] = (display_line_count / pen_count) / ratio;
+    //println("pen_distribution[" + p + "] = " + pen_distribution[p]);
+  //}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
